@@ -1,0 +1,9 @@
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\bin\Debug\Laboratory1.exe.config
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\bin\Debug\Laboratory1.exe
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\bin\Debug\Laboratory1.pdb
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory1.csprojResolveAssemblyReference.cache
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory1.Properties.Resources.resources
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory1.csproj.GenerateResource.Cache
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory1.exe
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory1.pdb
+C:\Users\vlanga\Documents\Work_UBB\Semestrul 4\SGB\Laboratory1\Laboratory1\obj\Debug\Laboratory2.MainForm.resources
