@@ -5,6 +5,7 @@ using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -16,10 +17,8 @@ namespace Laboratory2
         private SqlConnection m_sqlConnection;
 
         private SqlDataAdapter m_sqlDataAdapterParent;
-        private DataSet m_dataSetParent;
-
         private SqlDataAdapter m_sqlDataAdapterChild;
-        private DataSet m_dataSetChild;
+        private DataSet m_dataSet;
 
         // binding sources
         private BindingSource m_bindingSourceParent;
@@ -38,38 +37,133 @@ namespace Laboratory2
         private void MainForm_Load(object sender, EventArgs e)
         {
             ConnectionStringSettings connectionSettings = ConfigurationManager.ConnectionStrings["connectionString"];
-            string connectionString = connectionSettings.ConnectionString;
-            m_sqlConnection = new SqlConnection(connectionString);
+            m_sqlConnection = new SqlConnection(connectionSettings.ConnectionString);
 
             m_bindingSourceParent = new BindingSource();
+            m_sqlDataAdapterParent = new SqlDataAdapter();
+
             m_bindingSourceChild = new BindingSource();
             m_sqlDataAdapterChild = new SqlDataAdapter();
-            m_sqlDataAdapterParent = new SqlDataAdapter();
-            m_dataSetParent = new DataSet();
-            m_dataSetChild = new DataSet();
+
+            m_dataSet = new DataSet();
+
+            // fill data set
+            initializeDataAdapters();
+
+            // populate grid views
+            initializeDataGridViews();
+
+            // setup grids and labels
+            initializeTextBoxesAndLabels();
+        }
+
+        private void initializeDataAdapters()
+        {
+            m_sqlConnection.Open();
+            
+            // update data set for the parent table
+            m_sqlDataAdapterParent.SelectCommand = new SqlCommand(
+                ConfigurationManager.AppSettings["ParentSelectCommand"],
+                m_sqlConnection);
+            m_sqlDataAdapterParent.Fill(m_dataSet, "ParentTable");
+
+            m_sqlDataAdapterChild.SelectCommand = new SqlCommand(
+                ConfigurationManager.AppSettings["ChildSelectCommand"],
+                m_sqlConnection);
+            m_sqlDataAdapterChild.SelectCommand.ExecuteNonQuery(); 
+            m_sqlDataAdapterChild.Fill(m_dataSet, "ChildTable");
+
+            m_sqlConnection.Close();
+        }
+
+        private void initializeTableRelations()
+        {
+            string id = ConfigurationManager.AppSettings["ParentId"];
+
+            DataRelation dataRelation = new DataRelation(
+                "FK_Parent_Child"
+                , m_dataSet.Tables["ParentTable"].Columns[id]
+                , m_dataSet.Tables["ChildTable"].Columns[id]
+                );
+            m_dataSet.Relations.Add(dataRelation);
+
+            m_bindingSourceParent.DataSource = m_dataSet;
+            m_bindingSourceParent.DataMember = "ParentTable";
+
+            m_bindingSourceChild.DataSource = m_bindingSourceParent;
+            m_bindingSourceChild.DataMember = "FK_Parent_Child";
+        }
+
+        private void initializeDataGridViews()
+        {
+            m_parentGridView.DataSource = m_bindingSourceParent;
+            m_childGridView.DataSource = m_bindingSourceChild;
+
+            initializeTableRelations();
+
+            m_childGridView.AutoResizeColumns();
+            m_parentGridView.AutoGenerateColumns = true;
+
+            //UpdateChildGridView();
+        }
+
+        private void initializeTextBoxesAndLabels()
+        {
+            m_index = 0;
+            m_textBoxList = new List<TextBox>();
+            m_labelList = new List<Label>();
+
+            // cleanup any remaining stuff
+
+            foreach (Control item in panel1.Controls.OfType<TextBox>())
+            {
+                panel1.Controls.Remove(item);
+            }
+            foreach (Control item in panel1.Controls.OfType<Label>())
+            {
+                panel1.Controls.Remove(item);
+            }
+
+
+            for (int index = 1; index < m_dataSet.Tables["ChildTable"].Columns.Count - 1; index++)
+            {
+                Label label = new Label();
+                label.Text = m_dataSet.Tables["ChildTable"].Columns[index].ColumnName;
+
+                Point textP = new Point(80, m_index * 40);
+                Point lableP = new Point(0, m_index * 40);
+                label.Location = lableP;
+                label.AutoSize = true;
+
+                TextBox textBox = new TextBox();
+                textBox.Location = textP;
+                m_textBoxList.Add(textBox);
+                m_labelList.Add(label);
+                m_index++;
+
+                panel1.Controls.Add(label);
+                panel1.Controls.Add(textBox);
+            }
         }
 
         private void displayChildRecords_Click(object sender, EventArgs e)
         {
             m_sqlDataAdapterChild.SelectCommand =
-                new SqlCommand(ConfigurationManager.AppSettings["ChildSelectCommand"], m_sqlConnection);
+                new SqlCommand(ConfigurationManager.AppSettings["ChildSelectIdCommand"], m_sqlConnection);
 
             // get the hiking boots id
-            Int32 HbId;
-            if (!int.TryParse(this.hikingBootsGridView.CurrentRow.Cells[0].Value.ToString(), out HbId))
-            {
-                throw new Exception("Could not parse Hiking Boots Id from Grid View!");
-            }
+            int rowIndex = m_parentGridView.SelectedCells[0].RowIndex;
+            string parentId = m_parentGridView.Rows[rowIndex].Cells[0].Value.ToString();
 
-            m_sqlDataAdapterChild.SelectCommand.Parameters.Add("@id", SqlDbType.Int).Value = HbId;
+            m_sqlDataAdapterChild.SelectCommand.Parameters.Add("@value", SqlDbType.Int).Value = parentId;
 
             m_sqlConnection.Open();
             m_sqlDataAdapterChild.SelectCommand.ExecuteNonQuery();
             m_sqlConnection.Close();
 
-            m_dataSetChild.Clear();
-            m_sqlDataAdapterChild.Fill(m_dataSetChild);
-            cramponsGridView.DataSource = m_dataSetChild.Tables[0];
+            m_dataSet.Clear();
+            m_sqlDataAdapterChild.Fill(m_dataSet, "ChildTable");
+            m_childGridView.DataSource = m_dataSet.Tables[0];
         }
 
         private void UpdateChildGridView()
@@ -80,10 +174,10 @@ namespace Laboratory2
 
             m_sqlDataAdapterChild.SelectCommand.ExecuteNonQuery();
 
-            m_dataSetChild.Clear();
-            m_sqlDataAdapterChild.Fill(m_dataSetChild);
+            m_dataSet.Clear();
+            m_sqlDataAdapterChild.Fill(m_dataSet, "ChildTable");
 
-            cramponsGridView.DataSource = m_dataSetChild.Tables[0];
+            m_childGridView.DataSource = m_dataSet.Tables[0];
             m_sqlConnection.Close();
 
         }
@@ -95,29 +189,23 @@ namespace Laboratory2
                 m_sqlDataAdapterChild.InsertCommand = new SqlCommand(
                     ConfigurationManager.AppSettings["ChildInsertCommand"], m_sqlConnection);
 
-                // add the parameters from the text boxes
-                Int32 HbId;
-                if (!int.TryParse(this.hikingBootsGridView.CurrentRow.Cells[0].Value.ToString(), out HbId))
-                {
-                    throw new Exception("Could not parse Hiking Boots Id from Grid View!");
-                }
-
-                m_sqlDataAdapterChild.InsertCommand.Parameters.Add("@HikingBootsId", SqlDbType.Int).Value = HbId;
-
-                m_sqlDataAdapterChild.InsertCommand.Parameters.Add("@brand", SqlDbType.VarChar).Value = brandTextBox.Text;
-
-                m_sqlDataAdapterChild.InsertCommand.Parameters.Add("@quantity", SqlDbType.Int).Value = 
-                    Int32.Parse(quantityTextBox.Text);
-
-                m_sqlDataAdapterChild.InsertCommand.Parameters.Add("@size", SqlDbType.Int).Value =
-                    Int32.Parse(sizeTextBox.Text);
-
-                m_sqlDataAdapterChild.InsertCommand.Parameters.Add("@price", SqlDbType.Int).Value = 
-                    Int32.Parse(priceTextBox.Text);
+                int selectedRowIndex = m_parentGridView.SelectedCells[0].RowIndex;
+                string parentId = m_parentGridView.Rows[selectedRowIndex].Cells[0].Value.ToString();
 
                 m_sqlConnection.Open();
 
-                
+                string aux;
+                int index;
+
+                for (index = 0; index < m_dataSet.Tables["ChildTable"].Columns.Count - 2; index++)
+                {
+                    aux = "@value" + (index + 1).ToString();
+                    m_sqlDataAdapterChild.InsertCommand.Parameters.Add(aux, SqlDbType.VarChar).Value = 
+                        m_textBoxList[index].Text;
+                }
+
+                aux = "@value" + (index + 1).ToString();
+                m_sqlDataAdapterChild.InsertCommand.Parameters.Add(aux, SqlDbType.VarChar).Value = parentId;
 
                 m_sqlDataAdapterChild.InsertCommand.ExecuteNonQuery();
                 MessageBox.Show("Inserted Successful to the Database");
@@ -125,7 +213,7 @@ namespace Laboratory2
                 m_sqlConnection.Close();
 
                 // refresh the table so we can see the newly added stuff
-                UpdateChildGridView();
+                //UpdateChildGridView();
             }
 
             catch (Exception ex)
@@ -140,10 +228,14 @@ namespace Laboratory2
         {
             try
             {
-                int childId;
+                if (m_childGridView.SelectedCells.Count == 0)
+                    throw new Exception("Select a child row to delete!");
 
-                if (!int.TryParse(this.cramponsGridView.CurrentRow.Cells[0].Value.ToString(), out childId))
-                    throw new Exception("Failed to convert Id from Crampon Id from GridView!");
+                int childId = m_childGridView.SelectedCells[0].RowIndex;
+
+                // get the actual DB id
+                DataGridViewRow dataGridViewRow = m_childGridView.Rows[childId];
+                string databaseId = Convert.ToString(dataGridViewRow.Cells[0].Value);
 
                 m_sqlDataAdapterChild.DeleteCommand = new SqlCommand(
                     ConfigurationManager.AppSettings["ChildDeleteCommand"], m_sqlConnection);
@@ -153,43 +245,52 @@ namespace Laboratory2
                 m_sqlDataAdapterChild.DeleteCommand.ExecuteNonQuery();
                 m_sqlConnection.Close();
 
-                UpdateChildGridView();
+                //UpdateChildGridView();
             }
             catch (SqlException ex)
             {
                 m_sqlConnection.Close();
                 MessageBox.Show(ex.ToString());
             }
+            catch (Exception ex)
+            {
+                m_sqlConnection.Close();
+                MessageBox.Show(ex.ToString());
+            }
+
+
         }
 
         private void updateChild_Click(object sender, EventArgs e)
         {
             try
             {
-                int childId;
-
-                if (!int.TryParse(this.cramponsGridView.CurrentRow.Cells[0].Value.ToString(), out childId))
-                    throw new Exception("Failed to convert Id from Crampon Id from GridView!");
+                if (m_childGridView.SelectedCells.Count == 0)
+                    throw new Exception("Select a child row to delete!");
 
                 m_sqlDataAdapterChild.UpdateCommand = new SqlCommand(
                     ConfigurationManager.AppSettings["ChildUpdateCommand"], m_sqlConnection);
-               
-                m_sqlDataAdapterChild.UpdateCommand.Parameters.AddWithValue("@id", childId);
 
-                m_sqlDataAdapterChild.UpdateCommand.Parameters.AddWithValue("@brand", brandTextBox.Text);
+                string childId = m_childGridView.CurrentRow.Cells[0].Value.ToString();
+                string aux;
+                int index;
 
-                m_sqlDataAdapterChild.UpdateCommand.Parameters.AddWithValue("@quantity", Int32.Parse(quantityTextBox.Text));
+                for (index = 0; index < index - 2; index++)
+                {
+                    aux = "@value" + (index + 1).ToString();
+                    m_sqlDataAdapterChild.UpdateCommand.Parameters.Add(aux, SqlDbType.VarChar).Value =
+                        m_textBoxList[index].Text;
+                }
 
-                m_sqlDataAdapterChild.UpdateCommand.Parameters.AddWithValue("@size", Int32.Parse(sizeTextBox.Text));
-
-                m_sqlDataAdapterChild.UpdateCommand.Parameters.AddWithValue("@price", Int32.Parse(priceTextBox.Text));
+                aux = "@value" + (index + 1).ToString();
+                m_sqlDataAdapterParent.UpdateCommand.Parameters.Add(aux, SqlDbType.VarChar).Value = childId;
 
                 m_sqlConnection.Open();
                 m_sqlDataAdapterChild.UpdateCommand.ExecuteNonQuery();
                 m_sqlConnection.Close();
 
                 // update stuff
-                UpdateChildGridView();
+                //UpdateChildGridView();
             }
             catch (SqlException ex)
             {
@@ -205,10 +306,8 @@ namespace Laboratory2
             m_sqlDataAdapterParent.SelectCommand = new SqlCommand(
                 ConfigurationManager.AppSettings["ParentSelectCommand"], m_sqlConnection);
 
-            m_dataSetParent.Clear();
-            m_sqlDataAdapterParent.Fill(m_dataSetParent);
-
-            hikingBootsGridView.DataSource = m_dataSetParent.Tables[0];
+            m_dataSet.Clear();
+            m_sqlDataAdapterParent.Fill(m_dataSet, "ParentTable");
 
             m_sqlConnection.Close();
         }
